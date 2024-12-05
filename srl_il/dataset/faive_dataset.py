@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from glob import glob
+import os
 # from sentence_transformers import SentenceTransformer
 
 class FaiveTrajectorySequenceDataset(TrajectoryDataset):

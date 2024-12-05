@@ -24,6 +24,9 @@ def main(cfg: OmegaConf):
     # will use the same time.
     OmegaConf.resolve(cfg)
 
+    if not os.path.exists(cfg["dataset_cfg"]["data"]["data_directory"]):
+        raise FileNotFoundError(f"(In IL YAML file) Data directory {cfg['dataset_cfg']['data']['data_directory']} does not exist")
+
     # create the pipeline
     pipeline_cls = hydra.utils.get_class(cfg.pipeline._target_)
 

@@ -7,4 +7,5 @@ runs
 Data
 .vscode/settings.json
 
+recordings/
 visualize_h5data.py

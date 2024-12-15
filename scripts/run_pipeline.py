@@ -17,12 +17,15 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @hydra.main(
     version_base=None,
     # config_path=str(pathlib.Path(__file__).parent.parent.joinpath('srl_il','cfg'))
-    config_path=str(pathlib.Path(__file__).parent.parent.joinpath('srl_il','cfg/orca/ACT'))
+    config_path=str(pathlib.Path(__file__).parent.parent.joinpath('srl_il','cfg'))
 )
 def main(cfg: OmegaConf):
     # resolve immediately so all the ${now:} resolvers
     # will use the same time.
     OmegaConf.resolve(cfg)
+
+    if not os.path.exists(cfg["dataset_cfg"]["data"]["data_directory"]):
+        raise FileNotFoundError(f"(In IL YAML file) Data directory {cfg['dataset_cfg']['data']['data_directory']} does not exist")
 
     # create the pipeline
     pipeline_cls = hydra.utils.get_class(cfg.pipeline._target_)

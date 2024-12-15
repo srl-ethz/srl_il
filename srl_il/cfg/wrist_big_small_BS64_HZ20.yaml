@@ -2,12 +2,13 @@ defaults:
   # presets do not directly configs the pipeline or the algothm. However it provides necessary information to resolve this config
   - _self_
 
+hertz: 20 # new; just used for naming
 batch_size: 64 # 100
 seed: 43
 debugrun: false
 wandb_cfg:
   project: orca
-  run_name: wrist_yellow_big_${.project}_BS${batch_size}_${now:%Y%m%d-%H%M%S}  # ${now:%Y%m%d-%H%M%S}_${.project}
+  run_name: ${.project}_Bs${batch_size}_Hz${hertz}_${now:%Y%m%d-%H%M%S}  # ${now:%Y%m%d-%H%M%S}_${.project}
   tags: ["test", "act"]
   mode: "online"
 output_dir: runs/${wandb_cfg.run_name}
@@ -18,7 +19,7 @@ pipeline:
 dataset_cfg:
   data:
     _target_: srl_il.dataset.faive_dataset.faive_train_val_test
-    data_directory: /home/ubuntu/recordings/wrist_cam_pick_big_yellow_processed # Data/srl/cube_relocation_processed
+    data_directory: /home/ubuntu/recordings/12-12-24-Morge/big_yellow # Data/srl/cube_relocation_processed processed_wrist/_processed_${hertz}hz
     test_fraction: 0.1
     val_fraction: 0.1
     window_size_train: 20
@@ -49,7 +50,7 @@ dataset_cfg:
     pad_type: 'near'
     random_seed: ${seed}
   batch_size: ${batch_size}
-  pin_memory: true
+  pin_memory: false
   num_workers: 2
 
 
@@ -114,8 +115,10 @@ algo_cfg:
         datakeys: ['oakd_front_view_images']
         encoder_cfg:
           type: crop_resnet18
-          resize_shape: [270, 480]
-          crop_shape: [224, 352]
+          # resize_shape: [270, 480]
+          # crop_shape: [224, 352]
+          resize_shape: [224, 224]
+          crop_shape: null
           pretrained: true
         posemb_cfg:
           type: none
@@ -123,8 +126,10 @@ algo_cfg:
         datakeys: ['oakd_side_view_images']
         encoder_cfg:
           type:  crop_resnet18
-          resize_shape: [270, 480]
-          crop_shape: [224, 352]
+          # resize_shape: [270, 480]
+          # crop_shape: [224, 352]
+          resize_shape: [224, 224]
+          crop_shape: null
           pretrained: true
         posemb_cfg:
           type: none
@@ -132,8 +137,10 @@ algo_cfg:
         datakeys: ['oakd_wrist_view_images']
         encoder_cfg:
           type:  crop_resnet18
-          resize_shape: [270, 480]
-          crop_shape: [224, 352]
+          # resize_shape: [270, 480]
+          # crop_shape: [224, 352]
+          resize_shape: [224, 224]
+          crop_shape: null
           pretrained: true
         posemb_cfg:
           type: none
@@ -155,38 +162,60 @@ algo_cfg:
       - ['oakd_wrist_view_images', 2] # NEW: Wrist
 
 
+# lr_scheduler_cfg:
+#   act_encoder:
+#     type: torch
+#     scheduler_cls: torch.optim.lr_scheduler.StepLR
+#     params:
+#       step_size: 1000
+#       gamma: 0.95
+#     step_with_metrics: false
+#   act_decoder:
+#     type: torch
+#     scheduler_cls: torch.optim.lr_scheduler.StepLR
+#     params:
+#       step_size: 10000
+#       gamma: 0.95
+#     step_with_metrics: false
+#   obs_encoder:
+#     type: torch
+#     scheduler_cls: torch.optim.lr_scheduler.StepLR
+#     params:
+#       step_size: 10000
+#       gamma: 0.95
+#     step_with_metrics: false
 lr_scheduler_cfg:
   act_encoder:
-    type: torch
-    scheduler_cls: torch.optim.lr_scheduler.StepLR
+    type: "diffusers"
+    name: cosine
     params:
-      step_size: 1000
-      gamma: 0.95
+      num_warmup_steps: 400
+      num_training_steps: 800000 # number per epoch * num_epochs
     step_with_metrics: false
   act_decoder:
-    type: torch
-    scheduler_cls: torch.optim.lr_scheduler.StepLR
+    type: "diffusers"
+    name: cosine
     params:
-      step_size: 10000
-      gamma: 0.95
+      num_warmup_steps: 400
+      num_training_steps: 800000 # number per epoch * num_epochs
     step_with_metrics: false
   obs_encoder:
-    type: torch
-    scheduler_cls: torch.optim.lr_scheduler.StepLR
+    type: "diffusers"
+    name: cosine
     params:
-      step_size: 10000
-      gamma: 0.95
+      num_warmup_steps: 2000
+      num_training_steps: 800000 # number per epoch * num_epochs
     step_with_metrics: false
 
 training_cfg:
   num_epochs: 500
   num_steps_per_epoch: 100
-  steps_saving: 2 # 10
+  steps_saving: 20 # 10
   rollout:
     enabled: false
 
   visualization:
-    enabled: true
+    enabled: false
     num_samples: 5
     every_n_epoch: 10
 
@@ -234,7 +263,7 @@ projection_visualizer_cfg:
   img_views: # (img_name, img_key, extrinsics_key, intrinsics_key)
   - ["front", "oakd_front_view_images", "oakd_front_view/extrinsics", "oakd_front_view/intrinsics"]
   - ["side", "oakd_side_view_images", "oakd_side_view/extrinsics", "oakd_side_view/intrinsics"]
-  - ["wrist", "oakd_wrist_view_images", "oakd_wrist_view/extrinsics", "oakd_wrist_view/intrinsics"] # NEW: Wrist
+  - ["wrist", "oakd_wrist_view_images"] #, "oakd_wrist_view/extrinsics", "oakd_wrist_view/intrinsics"] # NEW: Wrist
  
 # set the directory where the output files get saved
 hydra:

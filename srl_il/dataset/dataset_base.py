@@ -142,6 +142,7 @@ class SequenceDataset(Dataset):
 
         # check the keys
         data_sample_traj, data_sample_global = self.dataset[0]
+        
         all_names = []
         for key, src, start, end in self._keys_traj:
             assert src in data_sample_traj, f"Key {key} is from {src}, which is not found in the dataset"

@@ -65,9 +65,9 @@
           "id": "choose_cfg",
           "type": "pickString",
           "description": "hydra config file to process",
-          "options": ["imitation_learning_robomimic_act",
-                      "imitation_learning_robomimic_diffusion",
-                      "imitation_learning_faive_act"],
+          "options": ["imitation_learning_orca_act_wrist8",
+                      "imitation_learning_orca_act_wrist16",
+                      "imitation_learning_orca_act_wrist32"],
           "default": "train_embed_vq_act"
         },
         {
@@ -82,3 +82,7 @@
           }
       ]
 }
+
+//   "options": ["imitation_learning_robomimic_act",
+//               "imitation_learning_robomimic_diffusion",
+//               "imitation_learning_faive_act"],

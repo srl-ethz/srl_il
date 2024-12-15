@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from glob import glob
+import os
 # from sentence_transformers import SentenceTransformer
 
 class FaiveTrajectorySequenceDataset(TrajectoryDataset):
@@ -43,6 +44,15 @@ class FaiveTrajectorySequenceDataset(TrajectoryDataset):
                     traj_data.update({
                         key:  (obs_group[key], f, obs_group[key].name) for key in obs_group if key != "images"
                     })
+                    # for img_name, img_data in obs_group.get("images", {}).items():
+                    #     print(f"Reading {img_name}")
+                    #     print("img_data: ", img_data, type(img_data))
+                    #     print("img_data['color']: ", img_data["color"])
+                    #     print("img_data['color'].attrs: ", dict(img_data.attrs))
+                    #     print("Items: ", img_data["color"].attrs)   
+                    #     # print(obs_group.get("images", {}).values())
+                    #     exit()
+                    # exit()
                     for img_name, img_data in obs_group.get("images", {}).items():
                         traj_data[f"{img_name}/color"] = (img_data["color"], f, img_data["color"].name)
                         if "extrinsics" in img_data:

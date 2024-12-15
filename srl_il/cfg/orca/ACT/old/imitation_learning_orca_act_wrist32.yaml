@@ -1,0 +1,271 @@
+defaults:
+  # presets do not directly configs the pipeline or the algothm. However it provides necessary information to resolve this config
+  - _self_
+
+batch_size: 32 # 100
+seed: 43
+debugrun: false
+wandb_cfg:
+  project: orca
+  run_name: wrist_yellow_big_${.project}_BS${batch_size}_${now:%Y%m%d-%H%M%S}  # ${now:%Y%m%d-%H%M%S}_${.project}
+  tags: ["test", "act"]
+  mode: "online"
+output_dir: runs/${wandb_cfg.run_name}
+
+pipeline:
+  _target_: srl_il.pipeline.imitation_learning.ImitationLearningPipeline
+
+dataset_cfg:
+  data:
+    _target_: srl_il.dataset.faive_dataset.faive_train_val_test
+    data_directory: /home/ubuntu/recordings/wrist_cam_pick_big_yellow/_processed_10hz # Data/srl/cube_relocation_processed
+    test_fraction: 0.1
+    val_fraction: 0.1
+    window_size_train: 20
+    window_size_test: 20
+    keys_traj:  [
+              ['actions_franka', 'actions_franka', 0, null],  # use the first frame as the observation
+              ['actions_hand', 'actions_hand', 0, null],  # use the first frame as the observation
+              ['qpos_franka', 'qpos_franka', 0, 1],  
+              ['qpos_hand', 'qpos_hand', 0, 1],  
+              ['oakd_front_view_images', 'oakd_front_view/color', 0, 1],  
+              ['oakd_side_view_images', 'oakd_side_view/color', 0, 1],  
+              ['oakd_wrist_view_images', 'oakd_wrist_view/color', 0, 1],   # NEW: Wrist
+            ] 
+    keys_global: [
+      'oakd_front_view/extrinsics',
+      'oakd_front_view/intrinsics',
+      'oakd_front_view/projection',
+      'oakd_side_view/extrinsics',
+      'oakd_side_view/intrinsics',
+      'oakd_side_view/projection',
+      # 'oakd_wrist_view/extrinsics', # NEW: Wrist
+      # 'oakd_wrist_view/intrinsics', # NEW: Wrist
+      # 'oakd_wrist_view/projection', # NEW: Wrist
+      # 'task_description'
+    ]
+    pad_before: false
+    pad_after: true
+    pad_type: 'near'
+    random_seed: ${seed}
+  batch_size: ${batch_size}
+  pin_memory: false
+  num_workers: 2
+
+
+algo_cfg:
+  _target_: srl_il.algo.act.ACTPolicyTrainer
+  algo_cfg:
+    device: cuda
+    target_dims: 
+      actions_franka: 7
+      actions_hand: 17
+    z_dim: 32
+    T_target: 20
+    T_z: 1
+    encoder_is_causal: false
+    decoder_is_causal: true
+    encoder_group_keys: ['qpos']
+    decoder_group_keys: ['qpos', 'oakd_front_view_images', 'oakd_side_view_images', 'oakd_wrist_view_images'] # NEW: Wrist
+    encoder_cfg:
+      d_model: 256
+      nhead: 8
+      num_encoder_layers: 3
+      dim_feedforward: 1024
+      dropout: 0.1
+      activation: 'relu'
+    decoder_cfg:
+      d_model: 256
+      nhead: 8
+      num_encoder_layers: 3
+      dim_feedforward: 1024
+      dropout: 0.1
+      activation: 'relu'
+  trainer_cfg:
+    loss_params:
+      kl_weight: 10
+    optimizer_cfg:
+      act_encoder:
+        optm_cls: torch.optim.Adam
+        lr: 0.0001
+      act_decoder:
+        optm_cls: torch.optim.Adam
+        lr: 0.0001
+      obs_encoder:
+        optm_cls: torch.optim.Adam
+        lr: 0.0001
+      projs:
+        optm_cls: torch.optim.Adam
+        lr: 0.0001
+      embeds:
+        optm_cls: torch.optim.Adam
+        lr: 0.0001
+  obs_encoder_cfg:
+    output_dim: 256
+    obs_groups_cfg:
+      qpos:
+        datakeys: ['qpos_franka', 'qpos_hand']
+        encoder_cfg:
+          type: lowdim_concat
+          input_dim_total: 24 # 23
+        posemb_cfg:
+          type: none
+      oakd_front_view_images:
+        datakeys: ['oakd_front_view_images']
+        encoder_cfg:
+          type: crop_resnet18
+          # resize_shape: [270, 480]
+          # crop_shape: [224, 352]
+          resize_shape: [224, 224]
+          crop_shape: null
+          pretrained: true
+        posemb_cfg:
+          type: none
+      oakd_side_view_images:
+        datakeys: ['oakd_side_view_images']
+        encoder_cfg:
+          type:  crop_resnet18
+          # resize_shape: [270, 480]
+          # crop_shape: [224, 352]
+          resize_shape: [224, 224]
+          crop_shape: null
+          pretrained: true
+        posemb_cfg:
+          type: none
+      oakd_wrist_view_images: # NEW: Wrist
+        datakeys: ['oakd_wrist_view_images']
+        encoder_cfg:
+          type:  crop_resnet18
+          # resize_shape: [270, 480]
+          # crop_shape: [224, 352]
+          resize_shape: [224, 224]
+          crop_shape: null
+          pretrained: true
+        posemb_cfg:
+          type: none
+    group_emb_cfg:
+      type: "whole_seq_sine" # none, whole_seq_sine, each_group_learned, whole_seq_learned
+
+  policy_cfg: 
+    policy_bs: 1
+    policy_translator: null # directly return the dict 
+    policy_aggregator_cfg:
+      type: "temporal_aggr"
+      update_every: 1
+      k: 0.01
+    policy_obs_list: # policy names and temporal length
+      - ['qpos_franka', 1]
+      - ['qpos_hand', 1]
+      - ['oakd_front_view_images', 2]
+      - ['oakd_side_view_images', 2]
+      - ['oakd_wrist_view_images', 2] # NEW: Wrist
+
+
+# lr_scheduler_cfg:
+#   act_encoder:
+#     type: torch
+#     scheduler_cls: torch.optim.lr_scheduler.StepLR
+#     params:
+#       step_size: 1000
+#       gamma: 0.95
+#     step_with_metrics: false
+#   act_decoder:
+#     type: torch
+#     scheduler_cls: torch.optim.lr_scheduler.StepLR
+#     params:
+#       step_size: 10000
+#       gamma: 0.95
+#     step_with_metrics: false
+#   obs_encoder:
+#     type: torch
+#     scheduler_cls: torch.optim.lr_scheduler.StepLR
+#     params:
+#       step_size: 10000
+#       gamma: 0.95
+#     step_with_metrics: false
+lr_scheduler_cfg:
+  act_encoder:
+    type: "diffusers"
+    name: cosine
+    params:
+      num_warmup_steps: 400
+      num_training_steps: 800000 # number per epoch * num_epochs
+    step_with_metrics: false
+  act_decoder:
+    type: "diffusers"
+    name: cosine
+    params:
+      num_warmup_steps: 400
+      num_training_steps: 800000 # number per epoch * num_epochs
+    step_with_metrics: false
+  obs_encoder:
+    type: "diffusers"
+    name: cosine
+    params:
+      num_warmup_steps: 2000
+      num_training_steps: 800000 # number per epoch * num_epochs
+    step_with_metrics: false
+
+training_cfg:
+  num_epochs: 500
+  num_steps_per_epoch: 100
+  steps_saving: 20 # 10
+  rollout:
+    enabled: false
+
+  visualization:
+    enabled: false
+    num_samples: 5
+    every_n_epoch: 10
+
+
+
+normalizer_cfg:
+  actions_franka: # the target to reconstruct
+    type: dataset_stats
+    min_max: true
+    dataname: actions_franka
+  actions_hand: # the target to reconstruct
+    type: dataset_stats
+    min_max: true
+    dataname: actions_hand
+  qpos_franka:
+    type: dataset_stats
+    dataname: qpos_franka
+  qpos_hand:
+    type: dataset_stats
+    dataname: qpos_hand
+  oakd_front_view_images: # image net norm mean = [0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    type: hardcode
+    mean: [[[0.485]], [[0.456]], [[0.406]]]
+    std: [[[0.229]], [[0.224]], [[0.225]]]
+  oakd_side_view_images: # image net norm mean = [0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    type: hardcode
+    mean: [[[0.485]], [[0.456]], [[0.406]]]
+    std: [[[0.229]], [[0.224]], [[0.225]]]
+  oakd_wrist_view_images: # NEW: Wrist
+    type: hardcode
+    mean: [[[0.485]], [[0.456]], [[0.406]]]
+    std: [[[0.229]], [[0.224]], [[0.225]]]
+
+data_augmentation_cfg: # data augmetation is only used for the data loaded from dataset, no simulation data augmentation
+  data_augments:
+    - outname: qpos_hand
+      type: gaussian_noise
+      mean: 0.0
+      std: 0.01
+
+sim_env_cfg: {}
+  
+projection_visualizer_cfg:
+  pose_key: 'actions_franka'
+  img_views: # (img_name, img_key, extrinsics_key, intrinsics_key)
+  - ["front", "oakd_front_view_images", "oakd_front_view/extrinsics", "oakd_front_view/intrinsics"]
+  - ["side", "oakd_side_view_images", "oakd_side_view/extrinsics", "oakd_side_view/intrinsics"]
+  - ["wrist", "oakd_wrist_view_images"] #, "oakd_wrist_view/extrinsics", "oakd_wrist_view/intrinsics"] # NEW: Wrist
+ 
+# set the directory where the output files get saved
+hydra:
+  output_subdir: ${output_dir}/hydra
+  run:
+    dir: .
